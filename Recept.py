@@ -11,11 +11,11 @@ window.title("Кулинарный справочник")
 window.geometry("600x700+500+50")
 window.resizable(False, False)
 
-frame_add_prod = ttk.Labelframe(window, text='Добавление продуктов', style='info.TLabelframe', padding=5)
-frame_add_prod.place(x=10, y=10)
-
 frame_add_dish = ttk.Labelframe(window, text='Добавление блюд', style='info.TLabelframe', padding=5)
-frame_add_dish.place(x=300, y=10)
+frame_add_dish.place(x=10, y=10)
+
+frame_add_prod = ttk.Labelframe(window, text='Добавление продуктов', style='info.TLabelframe', padding=5)
+frame_add_prod.place(x=300, y=10)
 
 style = Style()
 button_style = (OUTLINE, WARNING)
@@ -58,6 +58,7 @@ def add_product():
         session.commit()
         print(f"Продукт {product_name} добавлен")
         update_product_listbox()
+        update_product_combobox()
 
 
 def add_dish():
@@ -71,7 +72,7 @@ def add_dish():
         print(f"Блюдо {dish_name} добавлен")
         update_dish_listbox()
         display_products_for_dish()
-        update_dish_combobox()
+        update_dish_listbox()
 
 
 def delete_product():
@@ -86,14 +87,26 @@ def delete_product():
         product = session.query(Product).filter_by(ProductName=selected_product).first()
 
         if product:
-            # Если продукт найден, удаляем его из сессии и коммитим изменения
+            # Удалите связи продукта с блюдами в таблице dish_product
+            session.query(DishProduct).filter_by(product_id=product.id).delete()
+
+            # Затем удалите сам объект Product
             session.delete(product)
             session.commit()
-            print(f"Продукт '{selected_product}' удален")
+            print(f"Продукт '{selected_product}' удален вместе со связями")
+
             # Удаляем выбранный элемент из Listbox
             product_listbox.delete(selected_index)
+
+            update_product_combobox()
+            # update_dish_listbox()
+            display_products_for_dish()
+
         else:
             print(f"Продукт '{selected_product}' не найден")
+    else:
+        print("Выберите продукт для удаления")
+
 
 
 def delete_dish():
@@ -116,7 +129,8 @@ def delete_dish():
             # Удаляем выбранный элемент из Listbox
             dish_listbox.delete(selected_index)
             display_products_for_dish()
-            update_dish_combobox()
+            update_dish_listbox()
+            display_products_for_dish()
         else:
             print(f"Блюдо '{selected_dish}' не найдено")
 
@@ -169,34 +183,36 @@ def update_dish_listbox():
         dish_listbox.insert(tk.END, dish.DishName)
 
 
-def update_dish_combobox():
+def update_product_combobox():
     # Очистите текущий список блюд в dish_combobox
-    dish_combobox['values'] = ()
+    product['values'] = ()
 
     # Получите список всех блюд из базы данных
     all_dishes = session.query(Dish).all()
 
     # Извлеките только имена блюд и обновите значения в dish_combobox
     dish_name = [dish.DishName for dish in all_dishes]
-    dish_combobox['values'] = tuple(dish_name)
+    product_combobox['values'] = tuple(dish_name)
 
 
-# def on_dish_select():
-#     # selected_dish = dish_combobox.get()
-#     selected_dish = dish_listbox.curselection()
-#     # Очистите текущее содержимое листбокса
-#     product_listbox.delete(0, tk.END)
-#
-#     # Получите блюдо из базы данных
-#     dish = session.query(Dish).filter_by(DishName=selected_dish).first()
-#
-#     if dish:
-#         # Получите продукты, связанные с выбранным блюдом
-#         products = session.query(Product).join(DishProduct).filter_by(dish_id=dish.id).all()
-#
-#         # Добавьте каждый продукт в листбокс
-#         for product in products:
-#             product_listbox.insert(tk.END, product.ProductName)
+def on_product_select():
+    selected_product = product_listbox.get()
+
+    # Получите блюдо из базы данных
+    products = session.query(Product).filter_by(ProductName=selected_product).first()
+
+    if products:
+
+        # Добавьте каждый продукт в листбокс
+        for product in products:
+            product_listbox.insert.combobox
+
+
+def update_product_combobox():
+    # Получите все продукты из product_listbox
+    all_products = [product_listbox.get(i) for i in range(product_listbox.size())]
+    # Обновите значения product_combobox с продуктами
+    product_combobox['values'] = tuple(all_products)
 
 
 def on_dish_select(event=None):
@@ -217,8 +233,14 @@ def on_dish_select(event=None):
 
             # Добавляем каждую запись в Treeview
             for dish_product in dish_products:
+                # Получаем продукт по ID из DishProduct
                 product = session.query(Product).filter_by(id=dish_product.product_id).first()
-                tree.insert("", "end", values=(product.ProductName, dish_product.gramm))
+                if product:
+                    # Проверяем, что продукт не является None
+                    tree.insert("", "end", values=(product.ProductName, dish_product.gramm))
+                else:
+                    print(f"Продукт с ID {dish_product.product_id} не найден")
+
 
 
 def display_products_for_dish():
@@ -226,53 +248,101 @@ def display_products_for_dish():
     # Очистите текущее содержимое Treeview
     tree.delete(*tree.get_children())  # Удалить все строки из Treeview
 
-    selected_dish = dish_combobox.get()
-    # selected_dish = dish_listbox.get(dish_listbox.curselection())
+    selected_index = dish_listbox.curselection()
 
-    # Получите блюдо из базы данных
-    dish = session.query(Dish).filter_by(DishName=selected_dish).first()
+    if selected_index:
+        selected_dish = dish_listbox.get(selected_index[0])
+        print(selected_dish)
 
-    if dish:
-        # Получите записи DishProduct, связанные с выбранным блюдом
-        dish_products = session.query(DishProduct).filter_by(dish_id=dish.id).all()
+        dish = session.query(Dish).filter_by(DishName=selected_dish).first()
 
-        # Добавьте каждую запись в Treeview
-        for dish_product in dish_products:
-            product = session.query(Product).filter_by(id=dish_product.product_id).first()
-            tree.insert("", "end", values=(product.ProductName, dish_product.gramm))
+        if dish:
+            # Получите записи DishProduct, связанные с выбранным блюдом
+            dish_products = session.query(DishProduct).filter_by(dish_id=dish.id).all()
 
+            # Добавьте каждую запись в Treeview
+            for dish_product in dish_products:
+                product = session.query(Product).filter_by(id=dish_product.product_id).first()
+                tree.insert("", "end", values=(product.ProductName, dish_product.gramm))
+
+
+# def add_products_to_dish():
+#
+#     selected_index = dish_listbox.curselection()
+#
+#     if selected_index:
+#         selected_dish = dish_listbox.get(selected_index[0])
+#         print(selected_dish)
+#         selected_gramm = entry_gramm.get()
+#
+#         dish = session.query(Dish).filter_by(DishName=selected_dish).first()
+#
+#         if dish:
+#
+#             selected_products = dish_combobox.get()  # Получите индексы выбранных продуктов
+#
+#             if selected_products:
+#                 # Получите текст выбранных продуктов
+#                 # selected_product_names = [product_listbox.get(index) for index in selected_products]
+#
+#                 # Получите объекты продуктов из базы данных
+#                 products = session.query(Product).filter_by(ProductName=selected_products).first()
+#                 # products = session.query(Product).filter(Product.ProductName.in_(selected_product_names)).all()
+#
+#                 # Создайте записи в таблице DishProduct для связи продуктов с блюдом
+#
+#                 for product in products:
+#                     dish_product = DishProduct(dish_id=dish.id, product_id=product.id, gramm=selected_gramm)
+#                     session.add(dish_product)
+#
+#                 session.commit()
+#
+#                 # Обновите список продуктов для выбранного блюда
+#                 display_products_for_dish()
+#                 print(f"Продукты добавлены к блюду: {selected_dish}")
+#             else:
+#                 print(f"Выберите продукты для добавления к блюду - {dish.DishName}")
+#
+#         else:
+#             print("Выберите блюдо для добавления продуктов.")
 
 def add_products_to_dish():
-    selected_dish = dish_combobox.get()
+    selected_product = product_combobox.get()  # Получите выбранный продукт из product_combobox
     selected_gramm = entry_gramm.get()
 
-    dish = session.query(Dish).filter_by(DishName=selected_dish).first()
+    if selected_product == "Выберите продукт":
+        print("Выберите продукт для добавления к блюду.")
+        return
 
-    if dish:
+    if selected_gramm == 'введите граммы':
+        print("Введите количество грамм.")
+        return
 
-        selected_products = product_listbox.curselection()  # Получите индексы выбранных продуктов
+    selected_index = dish_listbox.curselection()
 
-        if selected_products:
-            # Получите текст выбранных продуктов
-            selected_product_names = [product_listbox.get(index) for index in selected_products]
+    if selected_index:
+        selected_dish = dish_listbox.get(selected_index[0])
+        print(selected_dish)
 
-            # Получите объекты продуктов из базы данных
-            products = session.query(Product).filter(Product.ProductName.in_(selected_product_names)).all()
+        dish = session.query(Dish).filter_by(DishName=selected_dish).first()
 
-            # Создайте записи в таблице DishProduct для связи продуктов с блюдом
+        if dish:
+            # Получите объект продукта из базы данных
+            product = session.query(Product).filter_by(ProductName=selected_product).first()
 
-            for product in products:
+            if product:
+                # Создайте запись в таблице DishProduct для связи продукта с блюдом
                 dish_product = DishProduct(dish_id=dish.id, product_id=product.id, gramm=selected_gramm)
                 session.add(dish_product)
+                session.commit()
 
-            session.commit()
-
-            # Обновите список продуктов для выбранного блюда
-            display_products_for_dish()
-            print(f"Продукты добавлены к блюду: {selected_dish}")
+                # Обновите список продуктов для выбранного блюда
+                display_products_for_dish()
+                print(f"Продукт '{selected_product}' добавлен к блюду: {selected_dish}")
+            else:
+                print(f"Продукт '{selected_product}' не найден.")
         else:
-            print("Выберите продукты для добавления к блюду.")
-
+            print("Выберите блюдо для добавления продуктов.")
     else:
         print("Выберите блюдо для добавления продуктов.")
 
@@ -288,7 +358,7 @@ def remove_products_from_dish():
 
             if values:
                 selected_product = values[0]  # Первое значение - название продукта
-                selected_dish = dish_combobox.get()
+                selected_dish = dish_listbox.get(dish_listbox.curselection()[0])
 
                 # Найдите блюдо в базе данных по имени
                 dish = session.query(Dish).filter_by(DishName=selected_dish).first()
@@ -313,10 +383,7 @@ def remove_products_from_dish():
                     print(f"Блюдо '{selected_dish}' не найдено")
     else:
         print("Выберите продукты для удаления из блюда")
-        messagebox.showinfo("ПРЕДУПРЕЖДЕНИЕ", "Выберите продукты для удаления из блюдая")
-
-    # Обновите список продуктов в product_dish_listbox после удаления
-    display_products_for_dish()
+    on_dish_select()
 
 
 # Widgets Product
@@ -351,24 +418,24 @@ entry_product.bind("<FocusIn>", lambda event: on_entry_click(event, entry_produc
 entry_product.bind("<FocusOut>", lambda event: on_focusout(event, entry_product, 'введите продукт'))
 
 product_list_label = ttk.Label(window, text="Список продуктов", font="play 14")
-product_list_label.place(x=45, y=125)
+product_list_label.place(x=320, y=125)
 dish_list_label = ttk.Label(window, text="Список блюд", font="play 14")
-dish_list_label.place(x=320, y=125)
+dish_list_label.place(x=45, y=125)
 
-delete_button = ttk.Button(window, text="УДАЛИТЬ ПРОДУКТ", command=ask_question_delete_product, width=27,
+delete_button = ttk.Button(window, text="УДАЛИТЬ ПРОДУКТ", command=ask_question_delete_product, width=28,
                            style=button_style)
-delete_button.place(x=10, y=273)
+delete_button.place(x=300, y=275)
 
 product_listbox = tk.Listbox(window, width=30, height=7)
-product_listbox.place(x=10, y=150)
+product_listbox.place(x=300, y=150)
 
 # Widgets Dish
-delete_dish_button = ttk.Button(window, text="УДАЛИТЬ БЛЮДО", command=ask_question_delete_dish, width=27,
+delete_dish_button = ttk.Button(window, text="УДАЛИТЬ БЛЮДО", command=ask_question_delete_dish, width=28,
                                 style=button_style)
-delete_dish_button.place(x=300, y=275)
+delete_dish_button.place(x=10, y=275)
 
 dish_listbox = tk.Listbox(window, width=30, height=7)
-dish_listbox.place(x=300, y=150)
+dish_listbox.place(x=10, y=150)
 dish_listbox.bind("<<ListboxSelect>>", on_dish_select)
 
 add_to_dish_button = ttk.Button(window, text="ДОБАВИТЬ", command=add_products_to_dish, width=11, style=button_style)
@@ -379,15 +446,18 @@ remove_to_dish_button = ttk.Button(window, text="УДАЛИТЬ", command=remove
 remove_to_dish_button.place(x=135, y=620)
 
 # Запросите блюда из базы данных
-dishes = session.query(Dish).all()
+products = session.query(Product).all()
 
 # Создаем список имен блюд
-dish_names = [dish.DishName for dish in dishes]
+dish_names = [product.ProductName for product in products]
 
 # Создаем Combobox и устанавливаем список блюд
-dish_combobox = ttk.Combobox(window, values=dish_names, width=29, foreground='gray')
-dish_combobox.set("Выберите блюдо")
-dish_combobox.place(x=10, y=335)
+product_combobox = ttk.Combobox(window, values=dish_names, width=29, foreground='gray')
+product_combobox.set("Выберите продукт")
+product_combobox.place(x=10, y=335)
+
+# Привяжите обновление product_combobox к изменениям в product_listbox
+product_listbox.bind("<<ListboxSelect>>", lambda event=None: update_product_combobox())
 
 entry_gramm = ttk.Entry(window, width=31, foreground='gray')
 entry_gramm.place(x=10, y=372)
@@ -412,11 +482,12 @@ tree.place(x=10, y=420)
 display_products_for_dish()
 
 update_product_listbox()
-update_dish_listbox()
+
 
 # dish_combobox.bind("<<ComboboxSelected>>", on_dish_select)
 # dish_combobox.bind("<<ComboboxSelected>>", lambda event=None: display_products_for_dish())
 print(dish_listbox.curselection())
 # Привязываем обработчик события к выбору элемента в dish_listbox
-
+display_products_for_dish()
+update_dish_listbox()
 window.mainloop()
